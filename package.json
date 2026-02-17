@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "gulp",
-    "build": "gulp merge && gulp plugins && gulp sass_task && gulp lang_task && gulp sync_web && gulp build_web",
+    "build": "gulp build_ci",
     "build:github": "gulp pack_github",
     "debug": "gulp debug",
     "test": "vitest",
