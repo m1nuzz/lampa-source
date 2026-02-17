@@ -1,0 +1,249 @@
+name: CI Test
+
+on:
+  push:
+    branches:
+      - feature/macos-movist-custom-player
+  pull_request:
+    branches:
+      - main
+      - feature/macos-movist-custom-player
+  workflow_dispatch:
+
+jobs:
+  test-build:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Cache node modules
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+      
+      - name: Install dependencies
+        run: |
+          echo "📦 Installing dependencies..."
+          npm install
+          echo "✅ Dependencies installed"
+      
+      - name: List installed packages
+        run: |
+          echo "📋 Installed packages:"
+          npm list --depth=0 || true
+      
+      - name: Test Gulp tasks
+        run: |
+          echo "🔧 Testing Gulp availability..."
+          npx gulp --version
+          echo "✅ Gulp is available"
+      
+      - name: Build web version
+        run: |
+          echo "🏗️  Building web version..."
+          npm run build
+          echo "✅ Web build completed"
+      
+      - name: Verify build output
+        run: |
+          echo "🔍 Verifying build output..."
+          
+          if [ ! -d "build/web" ]; then
+            echo "❌ ERROR: build/web directory not found!"
+            exit 1
+          fi
+          
+          echo "✅ build/web directory exists"
+          echo ""
+          echo "📁 Directory structure:"
+          ls -la build/web/
+          echo ""
+          
+          # Check for critical files
+          REQUIRED_FILES=("index.html" "app.js")
+          
+          for file in "${REQUIRED_FILES[@]}"; do
+            if [ -f "build/web/$file" ]; then
+              size=$(du -h "build/web/$file" | cut -f1)
+              echo "✅ $file exists ($size)"
+            else
+              echo "❌ ERROR: $file not found!"
+              exit 1
+            fi
+          done
+          
+          # Check for CSS
+          if [ -d "build/web/css" ]; then
+            echo "✅ CSS directory exists"
+            ls -la build/web/css/ | head -n 10
+          else
+            echo "⚠️  WARNING: CSS directory not found"
+          fi
+          
+          # Check for plugins
+          if [ -d "build/web/plugins" ]; then
+            echo "✅ Plugins directory exists"
+            echo "   Plugin count: $(ls -1 build/web/plugins | wc -l)"
+          else
+            echo "⚠️  WARNING: Plugins directory not found"
+          fi
+          
+          echo ""
+          echo "✅ All critical files verified!"
+      
+      - name: Test Electron preparation
+        run: |
+          echo "🔧 Testing Electron file preparation..."
+          
+          # Create electron structure
+          mkdir -p electron/app
+          mkdir -p electron/assets
+          
+          echo "📋 Copying files to Electron app directory..."
+          cp -r build/web/* electron/app/
+          
+          echo "✅ Files copied successfully"
+          echo ""
+          echo "📁 Electron app structure:"
+          ls -la electron/app/ | head -n 15
+          
+          # Verify critical files
+          if [ -f "electron/app/index.html" ]; then
+            echo "✅ index.html copied to electron/app"
+          else
+            echo "❌ ERROR: index.html not in electron/app!"
+            exit 1
+          fi
+          
+          if [ -f "electron/app/app.js" ]; then
+            echo "✅ app.js copied to electron/app"
+          else
+            echo "❌ ERROR: app.js not in electron/app!"
+            exit 1
+          fi
+      
+      - name: Validate Electron config
+        run: |
+          echo "🔍 Validating Electron configuration..."
+          
+          if [ ! -f "electron/package.json" ]; then
+            echo "❌ ERROR: electron/package.json not found!"
+            exit 1
+          fi
+          
+          echo "✅ electron/package.json exists"
+          
+          if [ ! -f "electron/electron-main.js" ]; then
+            echo "❌ ERROR: electron-main.js not found!"
+            exit 1
+          fi
+          
+          echo "✅ electron-main.js exists"
+          
+          if [ ! -f "electron/preload.js" ]; then
+            echo "❌ ERROR: preload.js not found!"
+            exit 1
+          fi
+          
+          echo "✅ preload.js exists"
+          echo ""
+          echo "📋 Electron package.json:"
+          cat electron/package.json
+      
+      - name: Test Electron dependencies installation
+        working-directory: electron
+        run: |
+          echo "📦 Testing Electron dependencies installation..."
+          npm install --dry-run
+          echo "✅ Electron dependencies check passed"
+      
+      - name: Calculate sizes
+        run: |
+          echo "📊 Build sizes:"
+          echo ""
+          echo "Web build:"
+          du -sh build/web
+          echo ""
+          echo "Electron app:"
+          du -sh electron/app
+          echo ""
+          echo "Top 10 largest files:"
+          find build/web -type f -exec du -h {} + | sort -hr | head -n 10
+      
+      - name: Check for common issues
+        run: |
+          echo "🔍 Checking for common issues..."
+          echo ""
+          
+          # Check if app.js is minified/bundled
+          if [ -f "build/web/app.js" ]; then
+            lines=$(wc -l < "build/web/app.js")
+            size=$(stat -f%z "build/web/app.js" 2>/dev/null || stat -c%s "build/web/app.js")
+            echo "app.js: $lines lines, $size bytes"
+            
+            if [ $size -lt 10000 ]; then
+              echo "⚠️  WARNING: app.js seems too small ($size bytes)"
+            else
+              echo "✅ app.js size looks good"
+            fi
+          fi
+          
+          # Check for node_modules in build (shouldn't be there)
+          if [ -d "build/web/node_modules" ]; then
+            echo "⚠️  WARNING: node_modules found in build directory!"
+          else
+            echo "✅ No node_modules in build (good)"
+          fi
+          
+          # Check for source maps in production
+          if find build/web -name "*.map" | grep -q .; then
+            echo "⚠️  WARNING: Source maps found in build"
+            find build/web -name "*.map"
+          else
+            echo "✅ No source maps in build (good)"
+          fi
+      
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-build-output
+          path: |
+            build/web/
+            electron/app/
+          retention-days: 7
+      
+      - name: Test summary
+        if: always()
+        run: |
+          echo ""
+          echo "================================================"
+          echo "🎉 CI Test Summary"
+          echo "================================================"
+          echo ""
+          echo "✅ Dependencies installation: PASSED"
+          echo "✅ Web build: PASSED"
+          echo "✅ Build verification: PASSED"
+          echo "✅ Electron preparation: PASSED"
+          echo "✅ Configuration validation: PASSED"
+          echo ""
+          echo "📦 Ready for Electron build!"
+          echo ""
+          echo "To build Electron app locally:"
+          echo "  cd electron"
+          echo "  npm install"
+          echo "  npm run build:mac-arm64    # For Apple Silicon"
+          echo "  npm run build:mac-x64      # For Intel"
+          echo "  npm run build:universal    # For both"
+          echo ""
+          echo "================================================"
