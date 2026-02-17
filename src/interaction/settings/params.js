@@ -104,6 +104,8 @@ function init(){
             'infuse': 'Infuse',
             'mpv': 'MPV',
             'nplayer': 'nPlayer',
+            'movist': 'Movist Pro',
+            'custom': '#{settings_param_player_custom}',
             'tracyplayer': 'TracyPlayer',		
         },'inner')
 
@@ -113,6 +115,8 @@ function init(){
             'infuse': 'Infuse',
             'mpv': 'MPV',
             'nplayer': 'nPlayer',
+            'movist': 'Movist Pro',
+            'custom': '#{settings_param_player_custom}',
             'tracyplayer': 'TracyPlayer',		
         },'inner')
 
@@ -122,6 +126,8 @@ function init(){
             'infuse': 'Infuse',
             'mpv': 'MPV',
             'nplayer': 'nPlayer',
+            'movist': 'Movist Pro',
+            'custom': '#{settings_param_player_custom}',
             'tracyplayer': 'TracyPlayer',		
         },'inner')
     }
@@ -755,6 +761,8 @@ select('tmdb_proxy_api','','')
 select('tmdb_proxy_image','','')
 // Настройки VLC API
 select('vlc_api_password', '', '123456')
+// Custom player URL scheme
+select('custom_player_scheme','','vlc://')
 
 export default {
     listener,
