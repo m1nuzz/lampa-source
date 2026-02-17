@@ -1,17 +1,21 @@
 const { app, BrowserWindow, shell, Menu, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 let mainWindow = null;
 
 function createWindow() {
-  mainWindow = new BrowserWindow({
+  // Check if icon exists
+  const iconPath = path.join(__dirname, 'assets', 'icon.png');
+  const hasIcon = fs.existsSync(iconPath);
+
+  const windowOptions = {
     width: 1280,
     height: 720,
     minWidth: 800,
     minHeight: 600,
     backgroundColor: '#000000',
     title: 'Lampa',
-    icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -20,7 +24,14 @@ function createWindow() {
       allowRunningInsecureContent: false
     },
     show: false
-  });
+  };
+
+  // Add icon if it exists
+  if (hasIcon) {
+    windowOptions.icon = iconPath;
+  }
+
+  mainWindow = new BrowserWindow(windowOptions);
 
   // Load the app
   const appPath = path.join(__dirname, 'app', 'index.html');

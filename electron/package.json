@@ -20,11 +20,10 @@
     "copyright": "Copyright © 2026 m1nuzz",
     "mac": {
       "category": "public.app-category.entertainment",
-      "icon": "assets/icon.icns",
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": ["universal"]
         },
         {
           "target": "zip",
@@ -32,10 +31,8 @@
         }
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}",
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "entitlements": "entitlements.mac.plist",
-      "entitlementsInherit": "entitlements.mac.plist"
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
     },
     "dmg": {
       "contents": [
