@@ -1,0 +1,58 @@
+name: Build and Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build project
+        run: npm run build
+      
+      - name: Get release version
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
+      - name: Create archive
+        run: |
+          cd build
+          zip -r ../lampa-macos-${{ steps.get_version.outputs.version }}.zip .
+          cd ..
+      
+      - name: Calculate checksum
+        run: shasum -a 256 lampa-macos-${{ steps.get_version.outputs.version }}.zip > lampa-macos-${{ steps.get_version.outputs.version }}.sha256
+      
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./lampa-macos-${{ steps.get_version.outputs.version }}.zip
+          asset_name: lampa-macos-${{ steps.get_version.outputs.version }}.zip
+          asset_content_type: application/zip
+      
+      - name: Upload Checksum
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./lampa-macos-${{ steps.get_version.outputs.version }}.sha256
+          asset_name: lampa-macos-${{ steps.get_version.outputs.version }}.sha256
+          asset_content_type: text/plain
