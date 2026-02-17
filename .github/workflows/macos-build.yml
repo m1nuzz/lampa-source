@@ -37,6 +37,12 @@ jobs:
       - name: Build project
         run: npm run build
       
+      - name: Verify build output
+        run: |
+          echo "Checking build output..."
+          ls -la build/web/
+          echo "Build completed successfully!"
+      
       - name: Get version from package.json
         id: package_version
         run: |
@@ -46,9 +52,9 @@ jobs:
       
       - name: Create archive
         run: |
-          cd build
-          zip -r ../lampa-macos-v${{ steps.package_version.outputs.version }}.zip .
-          cd ..
+          cd build/web
+          zip -r ../../lampa-macos-v${{ steps.package_version.outputs.version }}.zip .
+          cd ../..
       
       - name: Calculate checksums
         run: |
