@@ -1,0 +1,80 @@
+{
+  "name": "lampa-macos",
+  "productName": "Lampa",
+  "version": "1.0.0",
+  "description": "Lampa - Movies and TV Shows",
+  "main": "electron-main.js",
+  "author": "m1nuzz",
+  "license": "GPL-3.0",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --mac --arm64 --x64",
+    "build:mac": "electron-builder --mac",
+    "build:mac-arm64": "electron-builder --mac --arm64",
+    "build:mac-x64": "electron-builder --mac --x64",
+    "build:universal": "electron-builder --mac --universal"
+  },
+  "build": {
+    "appId": "io.github.m1nuzz.lampa",
+    "productName": "Lampa",
+    "copyright": "Copyright © 2026 m1nuzz",
+    "mac": {
+      "category": "public.app-category.entertainment",
+      "icon": "assets/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist"
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "title": "Lampa ${version}",
+      "window": {
+        "width": 540,
+        "height": 380
+      }
+    },
+    "files": [
+      "electron-main.js",
+      "preload.js",
+      "app/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "app",
+        "to": "app",
+        "filter": ["**/*"]
+      }
+    ],
+    "directories": {
+      "output": "dist"
+    }
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "dependencies": {}
+}
