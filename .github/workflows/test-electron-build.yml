@@ -1,0 +1,353 @@
+name: Test Electron Build (macOS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        type: choice
+        options:
+          - 'test-only'
+          - 'build-dmg'
+          - 'build-zip-only'
+        default: 'test-only'
+      arch:
+        description: 'Architecture'
+        required: true
+        type: choice
+        options:
+          - 'arm64'
+          - 'x64'
+          - 'universal'
+        default: 'arm64'
+
+jobs:
+  test-electron:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: System info
+        run: |
+          echo "🖥️  System Information"
+          echo "==================="
+          echo "macOS version: $(sw_vers -productVersion)"
+          echo "Architecture: $(uname -m)"
+          echo "Node: $(node --version)"
+          echo "npm: $(npm --version)"
+          echo ""
+          echo "💾 Disk space:"
+          df -h .
+          echo ""
+      
+      - name: Install web dependencies
+        run: |
+          echo "📦 Installing web dependencies..."
+          npm install
+          echo "✅ Web dependencies installed"
+      
+      - name: Build web version
+        run: |
+          echo "🏗️  Building web version..."
+          npm run build
+          echo "✅ Web build completed"
+      
+      - name: Verify web build
+        run: |
+          echo "🔍 Verifying web build..."
+          echo ""
+          
+          if [ ! -d "build/web" ]; then
+            echo "❌ ERROR: build/web not found!"
+            exit 1
+          fi
+          
+          echo "📁 Build directory contents:"
+          ls -lah build/web/
+          echo ""
+          
+          echo "📊 Build size:"
+          du -sh build/web
+          echo ""
+          
+          # Check critical files
+          for file in index.html app.js; do
+            if [ -f "build/web/$file" ]; then
+              size=$(du -h "build/web/$file" | cut -f1)
+              echo "✅ $file ($size)"
+            else
+              echo "❌ $file NOT FOUND!"
+              exit 1
+            fi
+          done
+      
+      - name: Prepare Electron structure
+        run: |
+          echo "📂 Preparing Electron structure..."
+          
+          # Create directories
+          mkdir -p electron/app
+          mkdir -p electron/assets
+          
+          echo "📋 Copying web build to Electron..."
+          cp -rv build/web/* electron/app/
+          
+          echo "✅ Files copied"
+          echo ""
+          echo "📁 Electron app directory:"
+          ls -lah electron/app/ | head -n 20
+          echo ""
+          
+          echo "📊 Electron app size:"
+          du -sh electron/app
+      
+      - name: Verify Electron files
+        run: |
+          echo "🔍 Verifying Electron configuration..."
+          echo ""
+          
+          # Check main files
+          for file in package.json electron-main.js preload.js; do
+            if [ -f "electron/$file" ]; then
+              echo "✅ electron/$file exists"
+            else
+              echo "❌ electron/$file MISSING!"
+              exit 1
+            fi
+          done
+          
+          echo ""
+          echo "📄 electron/package.json:"
+          cat electron/package.json | jq '.name, .version, .main, .build.mac'
+          echo ""
+      
+      - name: Install Electron dependencies
+        working-directory: electron
+        run: |
+          echo "📦 Installing Electron dependencies..."
+          echo "This may take 3-5 minutes..."
+          echo ""
+          
+          npm install --verbose
+          
+          echo ""
+          echo "✅ Electron dependencies installed"
+          echo ""
+          echo "📦 Installed packages:"
+          npm list --depth=0
+      
+      - name: Check Electron installation
+        working-directory: electron
+        run: |
+          echo "🔍 Checking Electron installation..."
+          
+          if [ -d "node_modules/electron" ]; then
+            echo "✅ Electron installed"
+            echo "Version: $(cat node_modules/electron/package.json | jq -r .version)"
+          else
+            echo "❌ Electron NOT installed!"
+            exit 1
+          fi
+          
+          if [ -d "node_modules/electron-builder" ]; then
+            echo "✅ electron-builder installed"
+            echo "Version: $(cat node_modules/electron-builder/package.json | jq -r .version)"
+          else
+            echo "❌ electron-builder NOT installed!"
+            exit 1
+          fi
+      
+      - name: Test Electron packaging (dry run)
+        if: inputs.build_type == 'test-only'
+        working-directory: electron
+        run: |
+          echo "🧪 Testing Electron packaging (dry run)..."
+          echo "Architecture: ${{ inputs.arch }}"
+          echo ""
+          
+          case "${{ inputs.arch }}" in
+            arm64)
+              npx electron-builder --mac --arm64 --dir
+              ;;
+            x64)
+              npx electron-builder --mac --x64 --dir
+              ;;
+            universal)
+              npx electron-builder --mac --universal --dir
+              ;;
+          esac
+          
+          echo "✅ Packaging test completed"
+      
+      - name: Build Electron app (DMG)
+        if: inputs.build_type == 'build-dmg'
+        working-directory: electron
+        run: |
+          echo "🔨 Building Electron app with DMG..."
+          echo "Architecture: ${{ inputs.arch }}"
+          echo ""
+          
+          case "${{ inputs.arch }}" in
+            arm64)
+              npm run build:mac-arm64
+              ;;
+            x64)
+              npm run build:mac-x64
+              ;;
+            universal)
+              npm run build:universal
+              ;;
+          esac
+          
+          echo "✅ Build completed"
+      
+      - name: Build Electron app (ZIP only)
+        if: inputs.build_type == 'build-zip-only'
+        working-directory: electron
+        run: |
+          echo "🔨 Building Electron app (ZIP only, faster)..."
+          echo "Architecture: ${{ inputs.arch }}"
+          echo ""
+          
+          case "${{ inputs.arch }}" in
+            arm64)
+              npx electron-builder --mac --arm64 -c.mac.target=zip
+              ;;
+            x64)
+              npx electron-builder --mac --x64 -c.mac.target=zip
+              ;;
+            universal)
+              npx electron-builder --mac --universal -c.mac.target=zip
+              ;;
+          esac
+          
+          echo "✅ Build completed"
+      
+      - name: Verify build output
+        if: inputs.build_type != 'test-only'
+        working-directory: electron
+        run: |
+          echo "📦 Build output:"
+          echo ""
+          
+          if [ -d "dist" ]; then
+            echo "📁 dist/ directory contents:"
+            ls -lah dist/
+            echo ""
+            
+            echo "📊 File sizes:"
+            find dist -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.app" \) -exec du -h {} \;
+            echo ""
+            
+            # Check for .app bundle
+            if [ -d "dist/mac"*.app ]; then
+              echo "✅ .app bundle created"
+              ls -lah dist/mac*.app/Contents/MacOS/ || true
+            fi
+            
+            # Check for DMG
+            if ls dist/*.dmg 1> /dev/null 2>&1; then
+              echo "✅ DMG created"
+            fi
+            
+            # Check for ZIP
+            if ls dist/*.zip 1> /dev/null 2>&1; then
+              echo "✅ ZIP created"
+            fi
+          else
+            echo "❌ dist/ directory not found!"
+            exit 1
+          fi
+      
+      - name: Test packaged app structure
+        if: inputs.build_type != 'test-only'
+        working-directory: electron
+        run: |
+          echo "🔍 Checking packaged app structure..."
+          echo ""
+          
+          # Find .app bundle
+          APP_PATH=$(find dist -name "*.app" -type d | head -n 1)
+          
+          if [ -n "$APP_PATH" ]; then
+            echo "📱 App bundle: $APP_PATH"
+            echo ""
+            
+            echo "📂 Contents structure:"
+            ls -la "$APP_PATH/Contents/"
+            echo ""
+            
+            echo "📂 Resources:"
+            ls -la "$APP_PATH/Contents/Resources/" | head -n 15
+            echo ""
+            
+            # Check for app files
+            if [ -d "$APP_PATH/Contents/Resources/app" ]; then
+              echo "✅ app/ directory exists in Resources"
+              ls -la "$APP_PATH/Contents/Resources/app/" | head -n 10
+            else
+              echo "⚠️  app/ directory not found in Resources"
+            fi
+            
+            # Check for critical files in app
+            if [ -f "$APP_PATH/Contents/Resources/app/index.html" ]; then
+              echo "✅ index.html found in packaged app"
+            else
+              echo "❌ index.html NOT FOUND in packaged app!"
+            fi
+            
+            if [ -f "$APP_PATH/Contents/Resources/app/app.js" ]; then
+              echo "✅ app.js found in packaged app"
+            else
+              echo "❌ app.js NOT FOUND in packaged app!"
+            fi
+          else
+            echo "❌ No .app bundle found!"
+          fi
+      
+      - name: Upload build artifacts
+        if: inputs.build_type != 'test-only'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-electron-build-${{ inputs.arch }}
+          path: |
+            electron/dist/*.dmg
+            electron/dist/*.zip
+            electron/dist/*.app
+            electron/dist/mac/**
+          retention-days: 7
+      
+      - name: Build summary
+        if: always()
+        run: |
+          echo ""
+          echo "================================================"
+          echo "📊 Test Build Summary"
+          echo "================================================"
+          echo ""
+          echo "Build type: ${{ inputs.build_type }}"
+          echo "Architecture: ${{ inputs.arch }}"
+          echo ""
+          
+          if [ "${{ inputs.build_type }}" = "test-only" ]; then
+            echo "✅ Test packaging completed"
+            echo "ℹ️  No artifacts created (test-only mode)"
+          else
+            echo "✅ Build completed"
+            echo "📦 Check artifacts below"
+          fi
+          
+          echo ""
+          echo "💾 Disk usage:"
+          du -sh electron/dist 2>/dev/null || echo "No dist folder"
+          echo ""
+          
+          echo "================================================"
