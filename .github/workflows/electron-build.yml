@@ -1,0 +1,181 @@
+name: Electron macOS Build
+
+on:
+  push:
+    branches:
+      - main
+      - feature/macos-movist-custom-player
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create GitHub Release'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Install web dependencies
+        run: npm install
+      
+      - name: Build web version
+        run: npm run build
+      
+      - name: Verify web build
+        run: |
+          echo "Checking web build output..."
+          ls -la build/web/
+          echo "Web build completed!"
+      
+      - name: Prepare Electron app directory
+        run: |
+          mkdir -p electron/app
+          mkdir -p electron/assets
+          cp -r build/web/* electron/app/
+          echo "Files copied to Electron app directory"
+          ls -la electron/app/
+      
+      - name: Install Electron dependencies
+        working-directory: electron
+        run: npm install
+      
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+      
+      - name: Update Electron package version
+        working-directory: electron
+        run: |
+          npm version ${{ steps.version.outputs.version }} --no-git-tag-version
+          echo "Updated package.json version to ${{ steps.version.outputs.version }}"
+      
+      - name: Build Electron app (Universal)
+        working-directory: electron
+        run: |
+          npm run build:universal
+          echo "Electron build completed!"
+          ls -la dist/
+      
+      - name: Verify build output
+        working-directory: electron
+        run: |
+          echo "Build artifacts:"
+          find dist -type f -name "*.dmg" -o -name "*.zip" | while read file; do
+            echo "  - $(basename "$file") ($(du -h "$file" | cut -f1))"
+          done
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lampa-macos-electron
+          path: |
+            electron/dist/*.dmg
+            electron/dist/*.zip
+            electron/dist/*.yml
+          retention-days: 30
+      
+      - name: Create Release
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true' || startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            electron/dist/*.dmg
+            electron/dist/*.zip
+          body: |
+            ## 🎉 Lampa macOS App v${{ steps.version.outputs.version }}
+            
+            ### 📦 Native macOS Application
+            
+            This release includes native macOS applications built with Electron:
+            
+            - **Universal Binary** (Apple Silicon + Intel)
+            - **DMG Installer** - Drag & Drop installation
+            - **ZIP Archive** - Portable version
+            
+            ### ✨ Features
+            
+            - ✅ Native macOS application
+            - ✅ Movist Pro player support
+            - ✅ Custom Player with URL scheme
+            - ✅ IINA, Infuse, MPV support
+            - ✅ Enhanced player integration
+            - ✅ Menu bar and keyboard shortcuts
+            - ✅ Full-screen support
+            - ✅ Retina display optimization
+            
+            ### 📥 Installation
+            
+            #### DMG Installer
+            1. Download `Lampa-${{ steps.version.outputs.version }}-universal.dmg`
+            2. Open the DMG file
+            3. Drag Lampa to Applications folder
+            4. Launch from Applications
+            
+            #### ZIP Archive
+            1. Download the appropriate ZIP:
+               - `Lampa-${{ steps.version.outputs.version }}-arm64-mac.zip` for Apple Silicon (M1/M2/M3)
+               - `Lampa-${{ steps.version.outputs.version }}-x64-mac.zip` for Intel Macs
+            2. Extract the archive
+            3. Move Lampa.app to Applications
+            4. Launch the app
+            
+            ### 🔐 First Launch
+            
+            Since the app is not signed by Apple Developer, you may see a security warning:
+            
+            1. Right-click on Lampa.app
+            2. Select "Open"
+            3. Click "Open" in the dialog
+            
+            Or disable Gatekeeper temporarily:
+            ```bash
+            sudo xattr -cr /Applications/Lampa.app
+            ```
+            
+            ### 🎮 Supported Players
+            
+            - IINA
+            - Infuse
+            - MPV
+            - nPlayer
+            - Movist Pro
+            - Custom Player (any URL scheme)
+            - TracyPlayer
+            
+            ### ⚙️ Configuration
+            
+            1. Open Lampa
+            2. Go to Settings → Player
+            3. Select your preferred player
+            4. Enjoy!
+            
+            ### 🐛 Issues?
+            
+            Report issues at: https://github.com/m1nuzz/lampa-source/issues
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
